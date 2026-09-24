@@ -1,0 +1,6 @@
+{
+  "name": "Gerenciador de Horta",
+  "description": "Painel de monitoramento inteligente para horta escolar com telemetria em tempo real, status de canteiros, alertas de umidade e clima.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
