@@ -3,47 +3,61 @@ from typing import Optional
 
 @dataclass
 class LimiteSensor:
-      minimo: Optional[float] = None
-      maximo: Optional[float] = None
+    minimo: Optional[float] = None
+    maximo: Optional[float] = None
 
-LIMITES = {
-    "umidade_solo": LimiteSensor(minimo=30.0, maximo=80.0),
-    "umidade_ar": LimiteSensor(minimo=40.0, maximo=90.0),
-    "temperatura": LimiteSensor(minimo=10.0, maximo=30.0),
+LIMITES_POR_PLANTA = {
+    "tomate": {
+        "umidade_solo": LimiteSensor(minimo=30.0, maximo=70.0),
+        "umidade_ar": LimiteSensor(minimo=50.0, maximo=85.0),
+        "temperatura": LimiteSensor(minimo=10.0, maximo=34.0),
+        "luminosidade": LimiteSensor(minimo=0.0, maximo=120000.0),
+    },
+    "alface": {
+        "umidade_solo": LimiteSensor(minimo=25.0, maximo=70.0),
+        "umidade_ar": LimiteSensor(minimo=40.0, maximo=85.0),
+        "temperatura": LimiteSensor(minimo=6.0, maximo=30.0),
+        "luminosidade": LimiteSensor(minimo=0.0, maximo=120000.0),
+    },
+    "padrao": {
+        "umidade_solo": LimiteSensor(minimo=30.0, maximo=70.0),
+        "umidade_ar": LimiteSensor(minimo=40.0, maximo=85.0),
+        "temperatura": LimiteSensor(minimo=12.0, maximo=32.0),
+        "luminosidade": LimiteSensor(minimo=0.0, maximo=120000.0),
+    },
 }
 
-def avaliar_metrica(tipo: str, valor: float):
-    limites = LIMITES.get(tipo)
-
+def avaliar_metrica(tipo: str, valor: float, limites_planta: dict):
+    limites = limites_planta.get(tipo)
     alertas = []
 
     if limites is None:
-         return alertas
+        return alertas
 
     if limites.minimo is not None and valor < limites.minimo:
-         alertas.append(f"{tipo}: abaixo do ideal ({valor})")
+        alertas.append(f"{tipo}: abaixo do ideal ({valor})")
 
     if limites.maximo is not None and valor > limites.maximo:
-         alertas.append(f"{tipo}: acima do ideal ({valor})")
+        alertas.append(f"{tipo}: acima do ideal ({valor})")
 
     return alertas
 
-def avaliar_leitura(leitura: dict):
+def avaliar_leitura(leitura: dict, tipo_planta: str = "padrao"):
+    limites_planta = LIMITES_POR_PLANTA.get(tipo_planta, LIMITES_POR_PLANTA["padrao"])
     alertas_totais = []
 
     for tipo, valor in leitura.items():
-          resultado = avaliar_metrica(tipo, valor)
-          alertas_totais.extend(resultado)
+        resultado = avaliar_metrica(tipo, valor, limites_planta)
+        alertas_totais.extend(resultado)
 
     return alertas_totais
 
 def calcular_estatisticas(valores: list):
+    if not valores:
+        return {"media": None, "minimo": None, "maximo": None}
 
-     if not valores:
-          return {"media": None, "minimo": None, "maximo": None}
-
-     return {
-          "media": round(sum(valores) / len(valores), 2),
-          "minimo": round(min(valores), 2),
-          "maximo": round(max(valores), 2),
-     }
+    return {
+        "media": round(sum(valores) / len(valores), 2),
+        "minimo": round(min(valores), 2),
+        "maximo": round(max(valores), 2),
+    }
