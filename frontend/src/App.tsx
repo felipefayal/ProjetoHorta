@@ -5,6 +5,7 @@
 
 import React, { useState } from 'react';
 import { Plus, Check, CheckCircle2, Download } from 'lucide-react';
+import Login from './components/views/Login';
 import { Sidebar, NavItem } from './components/Sidebar';
 import { Header } from './components/Header';
 import { StatCards } from './components/StatCards';
@@ -29,6 +30,7 @@ import {
 import { GardenBed, GardenAlert } from './types/garden';
 
 export default function App() {
+  const [isLoggedIn, setIsLoggedIn] = useState(false);
   const [currentTab, setCurrentTab] = useState<NavItem>('dashboard');
   const [beds, setBeds] = useState<GardenBed[]>(INITIAL_GARDEN_BEDS);
   const [alerts, setAlerts] = useState<GardenAlert[]>(INITIAL_ALERTS);
@@ -157,6 +159,10 @@ export default function App() {
     sensores: 'Sensores',
     relatorios: 'Relatórios',
   };
+
+  if (!isLoggedIn) {
+    return <Login onLogin={() => setIsLoggedIn(true)} />;
+  }
 
   return (
     <div className="min-h-screen bg-[#f7f9f6] flex flex-col lg:flex-row text-[#172b1d] font-sans antialiased selection:bg-[#d6ebd9] selection:text-[#184222]">
