@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { Plus, Check, CheckCircle2, Download } from 'lucide-react';
 import Login from './components/views/Login';
 import { Sidebar, NavItem } from './components/Sidebar';
@@ -21,19 +21,20 @@ import { PlantasView } from './components/views/PlantasView';
 import { SensoresView } from './components/views/SensoresView';
 import { RelatoriosView } from './components/views/RelatoriosView';
 import { exportReportByType } from './utils/generatePdfReport.ts';
+import type { MockUser } from './components/views/Login';
 
-import {
-  INITIAL_GARDEN_BEDS,
-  INITIAL_ALERTS,
-  ENVIRONMENT_METRICS,
-} from './data/mockGardenData';
-import { GardenBed, GardenAlert } from './types/garden';
+import { getAlerts, getEnvironmentMetrics, getGardenBeds } from './services/hortaService';
+import type { EnvironmentMetric, GardenBed, GardenAlert } from './types/garden';
 
 export default function App() {
   const [isLoggedIn, setIsLoggedIn] = useState(false);
+  const [loggedInUser, setLoggedInUser] = useState<MockUser | null>(null);
   const [currentTab, setCurrentTab] = useState<NavItem>('dashboard');
-  const [beds, setBeds] = useState<GardenBed[]>(INITIAL_GARDEN_BEDS);
-  const [alerts, setAlerts] = useState<GardenAlert[]>(INITIAL_ALERTS);
+  const [beds, setBeds] = useState<GardenBed[]>([]);
+  const [alerts, setAlerts] = useState<GardenAlert[]>([]);
+  const [environmentMetrics, setEnvironmentMetrics] = useState<EnvironmentMetric[]>([]);
+  const [isDataLoading, setIsDataLoading] = useState(true);
+  const [dataError, setDataError] = useState<string | null>(null);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [showAllBeds, setShowAllBeds] = useState(false);
 
@@ -44,6 +45,29 @@ export default function App() {
 
   // Toast feedback state
   const [toastMessage, setToastMessage] = useState<string | null>(null);
+
+  useEffect(() => {
+    let active = true;
+    Promise.all([getGardenBeds(), getAlerts(), getEnvironmentMetrics()])
+      .then(([gardenBeds, gardenAlerts, metrics]) => {
+        if (!active) return;
+        setBeds(gardenBeds);
+        setAlerts(gardenAlerts);
+        setEnvironmentMetrics(metrics);
+        setDataError(null);
+      })
+      .catch((error: unknown) => {
+        if (!active) return;
+        setDataError(error instanceof Error ? error.message : 'Não foi possível carregar os dados da horta.');
+      })
+      .finally(() => {
+        if (active) setIsDataLoading(false);
+      });
+
+    return () => {
+      active = false;
+    };
+  }, []);
 
   const showToast = (message: string) => {
     setToastMessage(message);
@@ -161,7 +185,35 @@ export default function App() {
   };
 
   if (!isLoggedIn) {
-    return <Login onLogin={() => setIsLoggedIn(true)} />;
+    return (
+      <Login
+        onLogin={(user) => {
+          setLoggedInUser(user);
+          setIsLoggedIn(true);
+        }}
+      />
+    );
+  }
+
+  if (isDataLoading || dataError) {
+    return (
+      <main className="flex min-h-screen items-center justify-center bg-[#f7f9f6] p-6 text-center">
+        <div className="max-w-md rounded-2xl border border-stone-200 bg-white p-8 shadow-sm">
+          <h1 className="text-xl font-bold text-[#172b1d]">
+            {isDataLoading ? 'Carregando dados da horta...' : 'Não foi possível carregar a horta'}
+          </h1>
+          {dataError && <p role="alert" className="mt-3 text-sm text-red-700">{dataError}</p>}
+          {dataError && (
+            <button
+              onClick={() => window.location.reload()}
+              className="mt-5 rounded-xl bg-[#1b4d2a] px-4 py-2.5 text-sm font-semibold text-white"
+            >
+              Tentar novamente
+            </button>
+          )}
+        </div>
+      </main>
+    );
   }
 
   return (
@@ -176,6 +228,7 @@ export default function App() {
 
       {/* Left Sidebar Navigation */}
       <Sidebar
+        user={loggedInUser ?? { name: 'Fernanda', role: 'Professora' }}
         currentTab={currentTab}
         onSelectTab={setCurrentTab}
         onOpenHelp={() => setIsGuideOpen(true)}
@@ -204,7 +257,7 @@ export default function App() {
                     VISÃO GERAL
                   </span>
                   <h1 className="text-2xl sm:text-3xl font-extrabold text-[#172b1d] tracking-tight">
-                    Bom dia, Fernanda!
+                    Bom dia, {loggedInUser?.name ?? 'Fernanda'}!
                   </h1>
                   <p className="text-xs sm:text-sm text-stone-500 mt-1">
                     Aqui está o resumo das condições da horta hoje.
@@ -215,7 +268,7 @@ export default function App() {
                 <div className="flex flex-wrap items-center gap-2.5 self-start sm:self-auto">
                   <button
                     onClick={() => {
-                      exportReportByType('geral', beds, alerts, ENVIRONMENT_METRICS);
+                      exportReportByType('geral', beds, alerts, environmentMetrics);
                       showToast('Relatório da horta em PDF exportado com sucesso!');
                     }}
                     className="inline-flex items-center gap-2 px-3.5 py-2.5 bg-white hover:bg-stone-50 border border-stone-200/90 text-stone-700 hover:text-[#1b4d2a] text-xs sm:text-sm font-semibold rounded-xl shadow-xs transition-all duration-150 cursor-pointer active:scale-95"
@@ -282,7 +335,7 @@ export default function App() {
                   />
                 </div>
                 <div className="lg:col-span-1">
-                  <EnvironmentGrid metrics={ENVIRONMENT_METRICS} />
+                  <EnvironmentGrid metrics={environmentMetrics} />
                 </div>
               </div>
             </div>
@@ -310,7 +363,7 @@ export default function App() {
             <RelatoriosView
               beds={beds}
               alerts={alerts}
-              metrics={ENVIRONMENT_METRICS}
+              metrics={environmentMetrics}
               onExportSuccess={(msg) => showToast(msg)}
             />
           )}

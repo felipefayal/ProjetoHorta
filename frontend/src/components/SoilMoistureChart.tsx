@@ -1,7 +1,7 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { ArrowUp } from 'lucide-react';
-import { ChartDataPoint } from '../types/garden';
-import { CHART_DATA_24H, CHART_DATA_7D, CHART_DATA_30D } from '../data/mockGardenData';
+import type { ChartDataPoint } from '../types/garden';
+import { getMoistureChart } from '../services/hortaService';
 
 type TimeRange = '24h' | '7d' | '30d';
 
@@ -13,15 +13,43 @@ export const SoilMoistureChart: React.FC<SoilMoistureChartProps> = ({
   currentMoisture = 61,
 }) => {
   const [timeRange, setTimeRange] = useState<TimeRange>('24h');
+  const [data, setData] = useState<ChartDataPoint[]>([]);
+  const [chartError, setChartError] = useState<string | null>(null);
   const [hoveredPoint, setHoveredPoint] = useState<ChartDataPoint | null>(null);
   const [hoverPos, setHoverPos] = useState<{ x: number; y: number } | null>(null);
 
-  const data =
-    timeRange === '24h'
-      ? CHART_DATA_24H
-      : timeRange === '7d'
-      ? CHART_DATA_7D
-      : CHART_DATA_30D;
+  useEffect(() => {
+    let active = true;
+    setData([]);
+    setChartError(null);
+    getMoistureChart(timeRange)
+      .then((points) => {
+        if (active) setData(points);
+      })
+      .catch((error: unknown) => {
+        if (active) {
+          setChartError(error instanceof Error ? error.message : 'Não foi possível carregar o gráfico.');
+        }
+      });
+    return () => {
+      active = false;
+    };
+  }, [timeRange]);
+
+  if (chartError) {
+    return (
+      <div role="alert" className="rounded-2xl border border-red-200 bg-white p-6 text-sm text-red-700">
+        {chartError}
+      </div>
+    );
+  }
+  if (data.length < 2) {
+    return (
+      <div className="flex min-h-[280px] items-center justify-center rounded-2xl border border-stone-200/70 bg-white p-6 text-sm text-stone-500">
+        Carregando gráfico de umidade...
+      </div>
+    );
+  }
 
   // Chart dimensions in viewBox coordinates
   const width = 640;

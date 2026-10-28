@@ -45,3 +45,18 @@ export interface NewRecordForm {
   temperature: number;
   notes: string;
 }
+
+export interface SensorReading {
+  sensor_id: string;
+  umidade_solo: number;
+  umidade_ar: number;
+  temperatura: number;
+  luminosidade: number;
+  tipo_planta?: string;
+}
+
+export interface SensorReadingResponse {
+  status: string;
+  dados: SensorReading & { tipo_planta: string };
+  alertas: string[];
+}

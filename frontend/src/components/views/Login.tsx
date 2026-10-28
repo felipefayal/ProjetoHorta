@@ -2,17 +2,36 @@ import { useState, type FormEvent } from 'react';
 import { LockKeyhole } from 'lucide-react';
 
 interface LoginProps {
-  onLogin: () => void;
+  onLogin: (user: MockUser) => void;
 }
+
+export interface MockUser {
+  name: string;
+  role: string;
+}
+
+const MOCK_USERS: MockUser[] = [
+  { name: 'Fernanda', role: 'Professora' },
+  { name: 'João', role: 'Usuário' },
+];
 
 function Login({ onLogin }: LoginProps) {
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [rememberMe, setRememberMe] = useState(false);
+  const [loginError, setLoginError] = useState(false);
 
   function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    onLogin();
+    const user = MOCK_USERS.find(
+      (mockUser) => mockUser.name.toLocaleLowerCase('pt-BR') === username.trim().toLocaleLowerCase('pt-BR'),
+    );
+    if (!user || password !== '123456') {
+      setLoginError(true);
+      return;
+    }
+    setLoginError(false);
+    onLogin(user);
   }
 
   return (
@@ -128,12 +147,22 @@ function Login({ onLogin }: LoginProps) {
                 name="password"
                 placeholder="Digite sua senha"
                 value={password}
-                onChange={(event) => setPassword(event.target.value)}
+                onChange={(event) => {
+                  setPassword(event.target.value);
+                  setLoginError(false);
+                }}
                 autoComplete="current-password"
                 required
                 className="w-full rounded-xl border border-stone-200 bg-[#fdfdfc] px-4 py-3.5 text-[13px] text-[#172b1d] outline-none transition-all placeholder:text-stone-400 focus:border-[#39804e] focus:bg-white focus:ring-4 focus:ring-[#285d38]/10"
               />
+              
             </div>
+
+            {loginError && (
+              <p role="alert" className="text-xs font-medium text-red-700">
+                Confira o usuário e a senha de demonstração 123456.
+              </p>
+            )}
 
             <div className="flex items-center">
               <label className="flex cursor-pointer items-center gap-2 text-xs text-stone-600">

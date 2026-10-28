@@ -14,6 +14,7 @@ import {
 export type NavItem = 'dashboard' | 'canteiros' | 'plantas' | 'sensores' | 'relatorios';
 
 interface SidebarProps {
+  user: { name: string; role: string };
   currentTab: NavItem;
   onSelectTab: (tab: NavItem) => void;
   onOpenHelp: () => void;
@@ -22,6 +23,7 @@ interface SidebarProps {
 }
 
 export const Sidebar: React.FC<SidebarProps> = ({
+  user,
   currentTab,
   onSelectTab,
   onOpenHelp,
@@ -148,15 +150,19 @@ export const Sidebar: React.FC<SidebarProps> = ({
         {/* User Profile */}
         <div className="flex items-center justify-between px-2 pt-2 border-t border-stone-200/60">
           <div className="flex items-center gap-3 min-w-0">
-            <div className="w-9 h-9 rounded-full bg-[#dbece0] text-[#1e5833] font-bold text-xs flex items-center justify-center shrink-0">
-              FL
+            <div
+              aria-label={`Perfil de ${user.name}`}
+              title={user.name}
+              className="w-9 h-9 rounded-full bg-[#dbece0] text-[#1e5833] font-bold text-xs flex items-center justify-center shrink-0"
+            >
+              {user.name.slice(0, 1).toLocaleUpperCase('pt-BR')}
             </div>
             <div className="min-w-0">
               <p className="text-sm font-semibold text-[#1b3323] leading-tight truncate">
-                Fernanda
+                {user.name}
               </p>
               <p className="text-xs text-stone-500 truncate mt-0.5">
-                Professora
+                {user.role}
               </p>
             </div>
           </div>

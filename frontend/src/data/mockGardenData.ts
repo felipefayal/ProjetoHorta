@@ -107,7 +107,7 @@ export const INITIAL_ALERTS: GardenAlert[] = [
     type: 'record',
     severity: 'info',
     bedId: 'c4',
-    read: true,
+    read: false,
   },
 ];
 
