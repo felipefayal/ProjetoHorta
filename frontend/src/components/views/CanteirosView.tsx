@@ -73,8 +73,7 @@ export const CanteirosView: React.FC<CanteirosViewProps> = ({
                       <span className="flex items-center gap-1">
                         <Droplets className="w-3.5 h-3.5 text-sky-600" /> Umidade do Solo
                       </span>
-                      <span className="font-bold text-stone-900 tabular-nums">
-                        {noReading ? '—' : `${bed.moisture}%`}
+                      
                       </span>
                     </div>
                     <div className="w-full bg-stone-100 rounded-full h-2 overflow-hidden">
