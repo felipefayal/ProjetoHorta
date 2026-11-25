@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 
 import os
 from dotenv import load_dotenv
@@ -44,3 +45,41 @@ def get_db():
         yield db
     finally:
         db.close()
+=======
+import os
+from collections.abc import Generator
+
+import psycopg
+from fastapi import HTTPException
+from psycopg.rows import dict_row
+
+
+def connect_database() -> psycopg.Connection:
+    database_url = os.getenv("DATABASE_URL", "").strip()
+    if not database_url:
+        raise HTTPException(
+            status_code=503,
+            detail="Banco não configurado. Defina DATABASE_URL no ambiente da API.",
+        )
+
+    try:
+        return psycopg.connect(
+            database_url,
+            connect_timeout=5,
+            row_factory=dict_row,
+        )
+    except psycopg.Error as error:
+        raise HTTPException(
+            status_code=503,
+            detail="Não foi possível conectar ao banco de dados.",
+        ) from error
+
+
+def get_connection() -> Generator[psycopg.Connection, None, None]:
+    connection = connect_database()
+    try:
+        with connection:
+            yield connection
+    finally:
+        connection.close()
+>>>>>>> 9bd6925 (novo)

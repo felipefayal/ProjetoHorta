@@ -1,0 +1,21 @@
+services:
+  - type: web
+    name: projetohorta-api
+    runtime: python
+    rootDir: backend
+    buildCommand: pip install -r requirements.txt
+    startCommand: uvicorn main:app --host 0.0.0.0 --port $PORT
+    healthCheckPath: /health
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.12.8
+      - key: DATABASE_URL
+        sync: false
+      - key: SESSION_SECRET
+        sync: false
+      - key: SENSOR_INGEST_TOKEN
+        sync: false
+      - key: INITIAL_ADMIN_EMAIL
+        sync: false
+      - key: CORS_ORIGINS
+        sync: false
