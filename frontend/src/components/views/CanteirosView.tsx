@@ -65,23 +65,7 @@ export const CanteirosView: React.FC<CanteirosViewProps> = ({
                     </div>
                   </div>
 
-                  <span
-                    className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-semibold ${
-                      isDry
-                        ? 'bg-[#faeee8] text-[#c2410c]'
-                        : noReading
-                        ? 'bg-stone-100 text-stone-600'
-                        : 'bg-[#e9f6ec] text-[#1b6b38]'
-                    }`}
-                  >
-                    <span
-                      className={`w-1.5 h-1.5 rounded-full ${
-                        isDry ? 'bg-[#c2410c]' : noReading ? 'bg-stone-500' : 'bg-[#1b6b38]'
-                      }`}
-                    />
-                    {bed.status}
-                  </span>
-                </div>
+                
 
                 <div className="space-y-3 py-3 border-y border-stone-100 my-2">
                   <div>
