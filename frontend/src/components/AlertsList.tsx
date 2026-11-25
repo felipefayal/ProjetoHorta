@@ -1,6 +1,6 @@
 import React from 'react';
-import { Droplet, Thermometer, PlusCircle, Check, ArrowRight } from 'lucide-react';
-import { GardenAlert } from '../types/garden';
+import { Droplet, Thermometer, PlusCircle, ArrowRight } from 'lucide-react';
+import type { GardenAlert } from '../types/garden';
 
 interface AlertsListProps {
   alerts: GardenAlert[];
@@ -13,11 +13,9 @@ export const AlertsList: React.FC<AlertsListProps> = ({
   alerts,
   onViewAll,
   onSelectAlert,
-  onDismissAlert,
 }) => {
   return (
     <div className="bg-white rounded-2xl p-6 border border-stone-200/70 shadow-[0_1px_3px_rgba(0,0,0,0.02)] flex flex-col justify-between">
-      {/* Header */}
       <div className="flex items-center justify-between mb-4">
         <span className="text-[11px] font-semibold text-stone-400 uppercase tracking-wider">
           ALERTAS RECENTES
@@ -30,8 +28,13 @@ export const AlertsList: React.FC<AlertsListProps> = ({
         </button>
       </div>
 
-      {/* Alert items list */}
       <div className="space-y-4">
+        {alerts.length === 0 && (
+          <p className="text-xs text-stone-400 py-4 text-center">
+            Nenhum alerta registrado recentemente.
+          </p>
+        )}
+
         {alerts.slice(0, 3).map((alert) => {
           const isMoisture = alert.type === 'moisture';
           const isTemp = alert.type === 'temperature';
@@ -42,21 +45,20 @@ export const AlertsList: React.FC<AlertsListProps> = ({
               onClick={() => onSelectAlert?.(alert)}
               className="group flex items-start gap-3.5 p-2 rounded-xl hover:bg-stone-50/80 transition-colors cursor-pointer"
             >
-              {/* Icon Container matching screenshot colors */}
               <div
-                className={`w-9 h-9 rounded-full flex items-center justify-center shrink-0 mt-0.5 transition-transform group-hover:scale-105 ${isMoisture
+                className={`w-9 h-9 rounded-full flex items-center justify-center shrink-0 mt-0.5 transition-transform group-hover:scale-105 ${
+                  isMoisture
                     ? 'bg-[#fdf0e9] text-[#e0653f]'
                     : isTemp
-                      ? 'bg-[#fef7e6] text-[#d97706]'
-                      : 'bg-[#eaf5ee] text-[#227a42]'
-                  }`}
+                    ? 'bg-[#fef7e6] text-[#d97706]'
+                    : 'bg-[#eaf5ee] text-[#227a42]'
+                }`}
               >
                 {isMoisture && <Droplet className="w-4 h-4 stroke-[2]" />}
                 {isTemp && <Thermometer className="w-4 h-4 stroke-[2]" />}
                 {!isMoisture && !isTemp && <PlusCircle className="w-4 h-4 stroke-[2]" />}
               </div>
 
-              {/* Text content */}
               <div className="flex-1 min-w-0">
                 <div className="flex items-center justify-between">
                   <h4 className="text-xs font-semibold text-[#182d1e] truncate group-hover:text-[#21673b] transition-colors">
@@ -71,7 +73,6 @@ export const AlertsList: React.FC<AlertsListProps> = ({
                 </span>
               </div>
 
-              {/* Optional dismiss or view arrow */}
               <div className="opacity-0 group-hover:opacity-100 transition-opacity self-center">
                 <ArrowRight className="w-3.5 h-3.5 text-stone-400 group-hover:text-[#21673b]" />
               </div>
@@ -80,11 +81,10 @@ export const AlertsList: React.FC<AlertsListProps> = ({
         })}
       </div>
 
-      {/* Footer subtle tip */}
       <div className="pt-3 border-t border-stone-100 mt-2 flex items-center justify-between text-[11px] text-stone-400">
-        <span>Monitoramento contínuo via telemetria</span>
-        <span className="flex items-center gap-1 text-emerald-600 font-medium">
-          <Check className="w-3 h-3" /> Conectado
+        <span>Alertas persistidos no banco</span>
+        <span className="font-medium text-stone-500">
+          {alerts.filter((alert) => !alert.read).length} em aberto
         </span>
       </div>
     </div>

@@ -1,5 +1,5 @@
 import React from 'react';
-import { Sprout, ArrowRight, Droplets, Thermometer, Check } from 'lucide-react';
+import { Sprout, ArrowRight, Droplets, Thermometer } from 'lucide-react';
 import { GardenBed } from '../types/garden';
 
 interface GardenBedsTableProps {
@@ -48,6 +48,7 @@ export const GardenBedsTable: React.FC<GardenBedsTableProps> = ({
           <tbody className="divide-y divide-stone-100/80">
             {displayedBeds.map((bed) => {
               const isDry = bed.status === 'Solo seco';
+              const noReading = bed.status === 'Atenção';
               return (
                 <tr
                   key={bed.id}
@@ -79,6 +80,8 @@ export const GardenBedsTable: React.FC<GardenBedsTableProps> = ({
                           className={`h-full rounded-full transition-all duration-500 ${
                             isDry
                               ? 'bg-amber-500'
+                              : bed.status === 'Atenção'
+                              ? 'bg-stone-300'
                               : bed.moisture > 70
                               ? 'bg-[#297a44]'
                               : 'bg-[#3b8c56]'
@@ -87,14 +90,14 @@ export const GardenBedsTable: React.FC<GardenBedsTableProps> = ({
                         />
                       </div>
                       <span className="text-[11px] font-semibold text-stone-700 tabular-nums">
-                        {bed.moisture}%
+                        {bed.status === 'Atenção' ? '—' : `${bed.moisture}%`}
                       </span>
                     </div>
                   </td>
 
                   {/* Temperature */}
                   <td className="py-3.5 pr-3 text-stone-600 font-medium tabular-nums whitespace-nowrap">
-                    {bed.temperature.toFixed(1)}°C
+                    {bed.status === 'Atenção' ? '—' : `${bed.temperature.toFixed(1)}°C`}
                   </td>
 
                   {/* Status pill badge */}
@@ -103,12 +106,14 @@ export const GardenBedsTable: React.FC<GardenBedsTableProps> = ({
                       className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-semibold ${
                         isDry
                           ? 'bg-[#faeee8] text-[#c2410c]'
+                          : noReading
+                          ? 'bg-stone-100 text-stone-600'
                           : 'bg-[#e9f6ec] text-[#1b6b38]'
                       }`}
                     >
                       <span
                         className={`w-1.5 h-1.5 rounded-full ${
-                          isDry ? 'bg-[#c2410c]' : 'bg-[#1b6b38]'
+                          isDry ? 'bg-[#c2410c]' : noReading ? 'bg-stone-500' : 'bg-[#1b6b38]'
                         }`}
                       />
                       {bed.status}
@@ -117,15 +122,22 @@ export const GardenBedsTable: React.FC<GardenBedsTableProps> = ({
                 </tr>
               );
             })}
+            {displayedBeds.length === 0 && (
+              <tr>
+                <td colSpan={5} className="py-8 text-center text-stone-500">
+                  Nenhum canteiro cadastrado no banco.
+                </td>
+              </tr>
+            )}
           </tbody>
         </table>
       </div>
 
       {/* Table footer action */}
       <div className="pt-3 border-t border-stone-100 flex items-center justify-between text-[11px] text-stone-400">
-        <span>{beds.length} canteiros monitorados pela rede LoRa</span>
+        <span>{beds.length} canteiros cadastrados</span>
         <span className="text-stone-400 font-normal">
-          Clique no canteiro para irrigar ou inspecionar
+          Clique no canteiro para ver detalhes
         </span>
       </div>
     </div>

@@ -5,9 +5,21 @@ interface GenerateReportOptions {
   subtitle?: string;
   category?: string;
   author?: string;
+  schoolNames?: string[];
   beds: GardenBed[];
   alerts?: GardenAlert[];
   metrics?: EnvironmentMetric[];
+}
+
+function escapeHtml(value: string | number | null | undefined): string {
+  const entities: Record<string, string> = {
+    '&': '&amp;',
+    '<': '&lt;',
+    '>': '&gt;',
+    '"': '&quot;',
+    "'": '&#39;',
+  };
+  return String(value ?? '').replace(/[&<>"']/g, (character) => entities[character]);
 }
 
 function loadScript(src: string): Promise<void> {
@@ -54,7 +66,8 @@ async function getJsPDF(): Promise<{ jsPDF: any; autoTable: any }> {
 export function printReportFallback({
   title = 'RELATÓRIO TÉCNICO DE MONITORAMENTO DA HORTA',
   subtitle = 'Boletim Consolidado de Dados Microclimáticos, Solo e Irrigação',
-  author = 'Professora Fernanda Lourenço',
+  author = 'Usuário da plataforma',
+  schoolNames = [],
   beds,
   alerts = [],
   metrics = [],
@@ -63,53 +76,28 @@ export function printReportFallback({
   const dateFormatted = now.toLocaleDateString('pt-BR');
   const timeFormatted = now.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
 
-  const avgMoisture = beds.length
-    ? Math.round(beds.reduce((acc, b) => acc + b.moisture, 0) / beds.length)
-    : 61;
-  const avgTemp = beds.length
-    ? (beds.reduce((acc, b) => acc + b.temperature, 0) / beds.length).toFixed(1)
-    : '27.4';
-  const dryBedsCount = beds.filter((b) => b.status === 'Solo seco' || b.moisture < 40).length;
-
-  const defaultMetrics = [
-    { title: 'Luminosidade Solar', value: '78%', status: 'Nível adequado (fotossíntese plena)' },
-    { title: 'Umidade Relativa do Ar', value: '69%', status: 'Faixa recomendada para hortaliças' },
-    { title: 'Temperatura Ambiente', value: '27,4 °C', status: 'Estável conforme histórico local' },
-    { title: 'Previsão de Chuva', value: '12 mm', status: 'Precipitação pluviométrica estimada' },
-  ];
-
-  const effectiveMetrics = metrics.length > 0 ? metrics : defaultMetrics;
-
-  const defaultAlerts = [
-    {
-      title: 'Rotina de Irrigação',
-      severity: 'Normal',
-      description: 'Sistema automatizado de gotejamento operando dentro dos parâmetros.',
-      timeAgo: 'Hoje',
-    },
-    {
-      title: 'Telemetria IoT',
-      severity: 'Normal',
-      description: 'Sensores de condutividade e umidade comunicando regularmente.',
-      timeAgo: 'Hoje',
-    },
-  ];
-
-  const effectiveAlerts = alerts.length > 0
-    ? alerts.map((a) => ({
-        title: a.title,
-        severity: a.severity === 'critical' ? 'CRÍTICO' : a.severity === 'warning' ? 'ATENÇÃO' : 'REGULAR',
-        description: a.description,
-        timeAgo: a.timeAgo,
-      }))
-    : defaultAlerts;
+  const measuredBeds = beds.filter((bed) => bed.status !== 'Atenção');
+  const avgMoisture = measuredBeds.length
+    ? `${Math.round(measuredBeds.reduce((acc, bed) => acc + bed.moisture, 0) / measuredBeds.length)}%`
+    : 'Sem leitura';
+  const avgTemp = measuredBeds.length
+    ? `${(measuredBeds.reduce((acc, bed) => acc + bed.temperature, 0) / measuredBeds.length).toFixed(1)} °C`
+    : 'Sem leitura';
+  const bedsNeedingAttention = beds.filter((bed) => bed.status !== 'Normal').length;
+  const institutionNames = schoolNames.length ? schoolNames.join(', ') : 'Nenhuma escola cadastrada';
+  const effectiveAlerts = alerts.map((alert) => ({
+    title: alert.title,
+    severity: alert.severity === 'critical' ? 'CRÍTICO' : alert.severity === 'warning' ? 'ATENÇÃO' : 'REGULAR',
+    description: alert.description,
+    timeAgo: alert.timeAgo,
+  }));
 
   const htmlContent = `
 <!DOCTYPE html>
 <html lang="pt-BR">
 <head>
   <meta charset="UTF-8">
-  <title>${title}</title>
+  <title>${escapeHtml(title)}</title>
   <style>
     @page {
       size: A4 portrait;
@@ -269,37 +257,36 @@ export function printReportFallback({
     <div class="logo-container">
       <img src="/planta.png" alt="Logo" class="doc-logo" onerror="this.style.display='none'" />
     </div>
-    <div class="doc-title">${title}</div>
-    <div class="doc-subtitle">${subtitle}</div>
+    <div class="doc-title">${escapeHtml(title)}</div>
+    <div class="doc-subtitle">${escapeHtml(subtitle)}</div>
   </div>
 
   <table class="info-table">
     <tr>
       <td class="label">Responsável Técnico:</td>
-      <td>${author}</td>
+      <td>${escapeHtml(author)}</td>
       <td class="label">Data de Emissão:</td>
       <td>${dateFormatted} às ${timeFormatted}</td>
     </tr>
     <tr>
       <td class="label">Unidade de Ensino:</td>
-      <td>Escola Municipal de Ensino Fundamental</td>
+      <td>${escapeHtml(institutionNames)}</td>
       <td class="label">Total de Canteiros:</td>
       <td>${beds.length} unidades cadastradas</td>
     </tr>
     <tr>
       <td class="label">Média de Umidade do Solo:</td>
-      <td>${avgMoisture}% (Média consolidada)</td>
+      <td>${avgMoisture}</td>
       <td class="label">Canteiros em Atenção:</td>
-      <td>${dryBedsCount} canteiro(s) demandando irrigação</td>
+      <td>${bedsNeedingAttention} canteiro(s) em atenção</td>
     </tr>
   </table>
 
   <div class="section-heading">1. RESUMO OPERACIONAL E CONDIÇÕES GERAIS</div>
   <p class="paragraph-text">
-    O presente documento formaliza os dados consolidados obtidos por meio do sistema de monitoramento microclimático
-    e telemetria de solo da Horta Escolar. Foram auditados ${beds.length} canteiros produtivos, registrando um índice
-    médio de retenção hídrica de ${avgMoisture}% e temperatura média do solo de ${avgTemp} °C. O sistema de irrigação
-    permanece configurado para mitigação hídrica automatizada nos talhões que apresentarem umidade inferior a 40%.
+    Este relatório apresenta os dados atualmente disponíveis no sistema para ${beds.length} canteiro(s).
+    Umidade média registrada: ${avgMoisture}; temperatura média registrada: ${avgTemp}.
+    Os dados refletem somente as medições recebidas e persistidas no banco até a emissão deste documento.
   </p>
 
   <div class="section-heading">2. REGISTRO E MONITORAMENTO DOS CANTEIROS</div>
@@ -317,12 +304,12 @@ export function printReportFallback({
     <tbody>
       ${beds.map((b) => `
         <tr>
-          <td class="font-bold">${b.name}</td>
-          <td>${b.plantType}</td>
-          <td class="text-center">${b.moisture}%</td>
-          <td class="text-center">${b.temperature} °C</td>
-          <td>${b.status}</td>
-          <td style="font-size: 8.5pt;">${b.lastWatered}</td>
+          <td class="font-bold">${escapeHtml(b.name)}</td>
+          <td>${escapeHtml(b.plantType)}</td>
+          <td class="text-center">${escapeHtml(b.status === 'Atenção' ? 'Sem leitura' : `${b.moisture}%`)}</td>
+          <td class="text-center">${escapeHtml(b.status === 'Atenção' ? 'Sem leitura' : `${b.temperature} °C`)}</td>
+          <td>${escapeHtml(b.status)}</td>
+          <td style="font-size: 8.5pt;">${escapeHtml(b.lastWatered ?? 'Sem registro')}</td>
         </tr>
       `).join('')}
     </tbody>
@@ -338,13 +325,13 @@ export function printReportFallback({
       </tr>
     </thead>
     <tbody>
-      ${effectiveMetrics.map((m) => `
+      ${metrics.length ? metrics.map((m) => `
         <tr>
-          <td class="font-bold">${m.title}</td>
-          <td class="text-center">${m.value}</td>
-          <td>${m.status}</td>
+          <td class="font-bold">${escapeHtml(m.title)}</td>
+          <td class="text-center">${escapeHtml(m.value)}</td>
+          <td>${escapeHtml(m.status)}</td>
         </tr>
-      `).join('')}
+      `).join('') : '<tr><td colspan="3">Nenhuma medição registrada.</td></tr>'}
     </tbody>
   </table>
 
@@ -359,27 +346,26 @@ export function printReportFallback({
       </tr>
     </thead>
     <tbody>
-      ${effectiveAlerts.map((a) => `
+      ${effectiveAlerts.length ? effectiveAlerts.map((a) => `
         <tr>
-          <td class="font-bold">${a.title}</td>
-          <td class="text-center font-bold">${a.severity}</td>
-          <td>${a.description}</td>
-          <td class="text-center" style="font-size: 8.5pt;">${a.timeAgo}</td>
+          <td class="font-bold">${escapeHtml(a.title)}</td>
+          <td class="text-center font-bold">${escapeHtml(a.severity)}</td>
+          <td>${escapeHtml(a.description)}</td>
+          <td class="text-center" style="font-size: 8.5pt;">${escapeHtml(a.timeAgo)}</td>
         </tr>
-      `).join('')}
+      `).join('') : '<tr><td colspan="4">Nenhum alerta registrado.</td></tr>'}
     </tbody>
   </table>
 
   <div class="section-heading">5. DESPACHO E OBSERVAÇÕES FINAIS</div>
   <p class="paragraph-text">
-    Atesta-se que a presente amostragem reflete com fidelidade as condições físicas e ambientais coletadas pelos sensores
-    do projeto na data supracitada. As recomendações agronômicas e manejos corretivos sugeridos devem ser executados pelas turmas
-    conforme o calendário pedagógico institucional.
+    Este documento não substitui a inspeção física da horta. Ações de manejo devem ser avaliadas pela equipe responsável
+    considerando as condições observadas na instituição.
   </p>
 
   <div class="signature-section">
     <div class="signature-line">
-      ${author}<br>
+      ${escapeHtml(author)}<br>
     </div>
   </div>
 
@@ -430,7 +416,8 @@ export function printReportFallback({
 export async function generateGardenPDF({
   title = 'RELATÓRIO TÉCNICO DE MONITORAMENTO DA HORTA',
   subtitle = 'Boletim de Dados Solo e Irrigação',
-  author = 'Professora Fernanda Lourenço',
+  author = 'Usuário da plataforma',
+  schoolNames = [],
   beds,
   alerts = [],
   metrics = [],
@@ -489,10 +476,12 @@ export async function generateGardenPDF({
       doc.line(margin, currentY, pageWidth - margin, currentY);
       currentY += 4.5;
 
-      const avgMoisture = beds.length
-        ? Math.round(beds.reduce((acc, b) => acc + b.moisture, 0) / beds.length)
-        : 61;
-      const dryBedsCount = beds.filter((b) => b.status === 'Solo seco' || b.moisture < 40).length;
+      const measuredBeds = beds.filter((bed) => bed.status !== 'Atenção');
+      const avgMoisture = measuredBeds.length
+        ? `${Math.round(measuredBeds.reduce((acc, bed) => acc + bed.moisture, 0) / measuredBeds.length)}%`
+        : 'Sem leitura';
+      const bedsNeedingAttention = beds.filter((bed) => bed.status !== 'Normal').length;
+      const institutionNames = schoolNames.length ? schoolNames.join(', ') : 'Nenhuma escola cadastrada';
 
       const metaTableOptions = {
         startY: currentY,
@@ -506,15 +495,15 @@ export async function generateGardenPDF({
           ],
           [
             { content: 'Unidade de Ensino:', styles: { fontStyle: 'bold', fillColor: [242, 242, 242] } },
-            'Escola Municipal de Ensino Fundamental',
+            institutionNames,
             { content: 'Total de Canteiros:', styles: { fontStyle: 'bold', fillColor: [242, 242, 242] } },
             `${beds.length} canteiros cadastrados`,
           ],
           [
             { content: 'Média de Umidade:', styles: { fontStyle: 'bold', fillColor: [242, 242, 242] } },
-            `${avgMoisture}% no solo`,
+            avgMoisture,
             { content: 'Canteiros em Atenção:', styles: { fontStyle: 'bold', fillColor: [242, 242, 242] } },
-            `${dryBedsCount} unidade(s) demandando irrigação`,
+            `${bedsNeedingAttention} unidade(s) em atenção`,
           ],
         ],
         theme: 'grid',
@@ -550,7 +539,7 @@ export async function generateGardenPDF({
 
       doc.setFont('helvetica', 'normal');
       doc.setFontSize(8.5);
-      const summaryText = `O presente documento formaliza os dados consolidados obtidos pelo sistema de telemetria da Horta Escolar. Foram auditados ${beds.length} canteiros produtivos, registrando índice médio de retenção hídrica de ${avgMoisture}% e operação regular dos sensores ambientais.`;
+      const summaryText = `Este relatório apresenta os dados atualmente disponíveis para ${beds.length} canteiro(s). Umidade média registrada: ${avgMoisture}. Os dados refletem somente as medições recebidas e persistidas no banco até a emissão deste documento.`;
       const splitSummary = doc.splitTextToSize(summaryText, contentWidth);
       doc.text(splitSummary, margin, currentY);
       currentY += splitSummary.length * 3.8 + 3.5;
@@ -563,10 +552,10 @@ export async function generateGardenPDF({
       const bedRows = beds.map((b) => [
         b.name,
         b.plantType,
-        `${b.moisture}%`,
-        `${b.temperature} °C`,
+        b.status === 'Atenção' ? 'Sem leitura' : `${b.moisture}%`,
+        b.status === 'Atenção' ? 'Sem leitura' : `${b.temperature} °C`,
         b.status,
-        b.lastWatered,
+        b.lastWatered ?? 'Sem registro',
       ]);
 
       const bedTableOptions = {
@@ -635,20 +624,23 @@ export async function generateGardenPDF({
     console.warn('Fallback acionado:', err);
   }
 
-  printReportFallback({ title, subtitle, author, beds, alerts, metrics });
+  printReportFallback({ title, subtitle, author, schoolNames, beds, alerts, metrics });
 }
 
 export function exportReportByType(
   type: 'geral' | 'clima' | 'diario' | 'irrigacao',
   beds: GardenBed[],
   alerts: GardenAlert[] = [],
-  metrics: EnvironmentMetric[] = []
-) {
+  metrics: EnvironmentMetric[] = [],
+  author = 'Usuário da plataforma',
+  schoolNames: string[] = [],
+): Promise<void> {
   switch (type) {
     case 'clima':
-      generateGardenPDF({
+      return generateGardenPDF({
         title: 'BOLETIM TÉCNICO DE UMIDADE DO SOLO',
-        author: 'XXX',
+        author,
+        schoolNames,
         beds,
         alerts,
         metrics,
@@ -656,9 +648,10 @@ export function exportReportByType(
       break;
 
     case 'diario':
-      generateGardenPDF({
+      return generateGardenPDF({
         title: 'DIÁRIO DE CAMPO PEDAGÓGICO - 5º ANO',
-        author: 'XXX',
+        author,
+        schoolNames,
         beds,
         alerts,
         metrics,
@@ -666,9 +659,10 @@ export function exportReportByType(
       break;
 
     case 'irrigacao':
-      generateGardenPDF({
+      return generateGardenPDF({
         title: 'RELATÓRIO TÉCNICO DE IRRIGAÇÃO E EFICIÊNCIA HÍDRICA',
-        author: 'XXX',
+        author,
+        schoolNames,
         beds,
         alerts,
         metrics,
@@ -677,9 +671,10 @@ export function exportReportByType(
 
     case 'geral':
     default:
-      generateGardenPDF({
+      return generateGardenPDF({
         title: 'RELATÓRIO CONSOLIDADO DA HORTA ESCOLAR',
-        author: 'XXX',
+        author,
+        schoolNames,
         beds,
         alerts,
         metrics,

@@ -3,8 +3,8 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import React, { useEffect, useState } from 'react';
-import { Plus, Check, CheckCircle2, Download } from 'lucide-react';
+import { useEffect, useRef, useState } from 'react';
+import { Plus, CheckCircle2, Download } from 'lucide-react';
 import Login from './components/views/Login';
 import { Sidebar, NavItem } from './components/Sidebar';
 import { Header } from './components/Header';
@@ -19,21 +19,45 @@ import { GardenGuideModal } from './components/GardenGuideModal';
 import { CanteirosView } from './components/views/CanteirosView';
 import { PlantasView } from './components/views/PlantasView';
 import { SensoresView } from './components/views/SensoresView';
+import { EscolasView } from './components/views/EscolasView';
 import { RelatoriosView } from './components/views/RelatoriosView';
 import { exportReportByType } from './utils/generatePdfReport.ts';
-import type { MockUser } from './components/views/Login';
+import type { UserProfile } from './types/garden';
 
-import { getAlerts, getEnvironmentMetrics, getGardenBeds } from './services/hortaService';
-import type { EnvironmentMetric, GardenBed, GardenAlert } from './types/garden';
+import {
+  createGardenRecord,
+  assignDeviceToSchool,
+  clearSession,
+  getCurrentUser,
+  getDevices,
+  getAlerts,
+  getEnvironmentMetrics,
+  getGardenBeds,
+  getSchools,
+  irrigateGardenBed,
+  markAlertsAsRead,
+} from './services/hortaService';
+import type {
+  EnvironmentMetric,
+  GardenBed,
+  GardenAlert,
+  GardenRecordDraft,
+  School,
+  SensorDevice,
+} from './types/garden';
 
 export default function App() {
   const [isLoggedIn, setIsLoggedIn] = useState(false);
-  const [loggedInUser, setLoggedInUser] = useState<MockUser | null>(null);
+  const [loggedInUser, setLoggedInUser] = useState<UserProfile | null>(null);
+  const [isRestoringSession, setIsRestoringSession] = useState(true);
+  const [authError, setAuthError] = useState<string | null>(null);
   const [currentTab, setCurrentTab] = useState<NavItem>('dashboard');
   const [beds, setBeds] = useState<GardenBed[]>([]);
   const [alerts, setAlerts] = useState<GardenAlert[]>([]);
   const [environmentMetrics, setEnvironmentMetrics] = useState<EnvironmentMetric[]>([]);
-  const [isDataLoading, setIsDataLoading] = useState(true);
+  const [schools, setSchools] = useState<School[]>([]);
+  const [devices, setDevices] = useState<SensorDevice[]>([]);
+  const [isDataLoading, setIsDataLoading] = useState(false);
   const [dataError, setDataError] = useState<string | null>(null);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [showAllBeds, setShowAllBeds] = useState(false);
@@ -45,123 +69,151 @@ export default function App() {
 
   // Toast feedback state
   const [toastMessage, setToastMessage] = useState<string | null>(null);
+  const [actionError, setActionError] = useState<string | null>(null);
+  const toastTimeout = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
     let active = true;
-    Promise.all([getGardenBeds(), getAlerts(), getEnvironmentMetrics()])
-      .then(([gardenBeds, gardenAlerts, metrics]) => {
+    getCurrentUser()
+      .then((user) => {
         if (!active) return;
-        setBeds(gardenBeds);
-        setAlerts(gardenAlerts);
-        setEnvironmentMetrics(metrics);
-        setDataError(null);
+        if (user) {
+          setLoggedInUser(user);
+          setIsLoggedIn(true);
+        }
       })
       .catch((error: unknown) => {
         if (!active) return;
-        setDataError(error instanceof Error ? error.message : 'Não foi possível carregar os dados da horta.');
+        setAuthError(error instanceof Error ? error.message : 'Não foi possível restaurar a sessão.');
       })
       .finally(() => {
-        if (active) setIsDataLoading(false);
+        if (active) setIsRestoringSession(false);
       });
-
     return () => {
       active = false;
     };
   }, []);
 
+  useEffect(() => {
+    if (!isLoggedIn) return;
+    let active = true;
+    let firstLoad = true;
+    setDataError(null);
+    setIsDataLoading(true);
+
+    const refreshData = () => {
+      Promise.all([
+        getGardenBeds(),
+        getAlerts(),
+        getEnvironmentMetrics(),
+        getSchools(),
+        getDevices(),
+      ])
+        .then(([gardenBeds, gardenAlerts, metrics, currentSchools, currentDevices]) => {
+          if (!active) return;
+          setBeds(gardenBeds);
+          setAlerts(gardenAlerts);
+          setEnvironmentMetrics(metrics);
+          setSchools(currentSchools);
+          setDevices(currentDevices);
+          setDataError(null);
+        })
+        .catch((error: unknown) => {
+          if (!active) return;
+          setDataError(error instanceof Error ? error.message : 'Não foi possível carregar os dados da horta.');
+        })
+        .finally(() => {
+          if (active && firstLoad) {
+            setIsDataLoading(false);
+            firstLoad = false;
+          }
+        });
+    };
+
+    refreshData();
+    const refreshInterval = window.setInterval(refreshData, 30_000);
+
+    return () => {
+      active = false;
+      window.clearInterval(refreshInterval);
+      if (toastTimeout.current) clearTimeout(toastTimeout.current);
+    };
+  }, [isLoggedIn]);
+
   const showToast = (message: string) => {
+    setActionError(null);
     setToastMessage(message);
-    setTimeout(() => {
+    if (toastTimeout.current) clearTimeout(toastTimeout.current);
+    toastTimeout.current = setTimeout(() => {
       setToastMessage(null);
+      toastTimeout.current = null;
     }, 3500);
   };
 
+  const showActionError = (message: string) => {
+    if (toastTimeout.current) {
+      clearTimeout(toastTimeout.current);
+      toastTimeout.current = null;
+    }
+    setToastMessage(null);
+    setActionError(message);
+  };
+
   // Handler: Irrigate a garden bed
-  const handleIrrigateBed = (bedId: string) => {
-    setBeds((prev) =>
-      prev.map((b) => {
-        if (b.id === bedId) {
-          return {
-            ...b,
-            moisture: 72,
-            temperature: 25.4,
-            status: 'Normal',
-            lastWatered: 'Agora mesmo (Gotejador)',
-          };
-        }
-        return b;
-      })
-    );
-
-    // Resolve dry soil alert if present for this bed
-    setAlerts((prev) =>
-      prev.map((a) => (a.bedId === bedId ? { ...a, read: true } : a))
-    );
-
-    const bed = beds.find((b) => b.id === bedId);
-    showToast(`Irrigação realizada com sucesso no ${bed?.name || 'Canteiro'}!`);
+  const handleIrrigateBed = async (bedId: string) => {
+    try {
+      const { bed, alerts: updatedAlerts } = await irrigateGardenBed(bedId);
+      setBeds((prev) => prev.map((item) => item.id === bedId ? bed : item));
+      setAlerts(updatedAlerts);
+      showToast(`Irrigação registrada para ${bed.name}.`);
+    } catch (error) {
+      showActionError(error instanceof Error ? error.message : 'Não foi possível irrigar o canteiro.');
+    }
   };
 
   // Handler: Add new record from modal
-  const handleCreateRecord = (record: {
-    bedId: string;
-    type: string;
-    moisture: number;
-    temperature: number;
-    notes: string;
-    plantName?: string;
-  }) => {
-    const targetBed = beds.find((b) => b.id === record.bedId);
-
-    setBeds((prev) =>
-      prev.map((b) => {
-        if (b.id === record.bedId) {
-          const newStatus =
-            record.moisture < 40 ? 'Solo seco' : 'Normal';
-          return {
-            ...b,
-            moisture: record.moisture,
-            temperature: record.temperature,
-            status: newStatus,
-            lastWatered:
-              record.type === 'irrigacao'
-                ? 'Hoje às 13:00'
-                : b.lastWatered,
-            plant: record.plantName || b.plant,
-          };
-        }
-        return b;
-      })
-    );
-
-    // Add alert notification entry
-    const newAlert: GardenAlert = {
-      id: `alert-${Date.now()}`,
-      title:
-        record.type === 'irrigacao'
-          ? 'Irrigação registrada'
-          : record.type === 'plantio'
-          ? 'Novo plantio registrado'
-          : 'Nova medição cadastrada',
-      description: `${targetBed?.name}: ${
-        record.notes || `Umidade em ${record.moisture}% e temp de ${record.temperature}°C.`
-      }`,
-      timeAgo: 'Agora mesmo',
-      timestamp: '13:00',
-      type: 'record',
-      severity: 'info',
-      bedId: record.bedId,
-      read: false,
-    };
-
-    setAlerts((prev) => [newAlert, ...prev]);
-    showToast(`Novo registro adicionado com sucesso para ${targetBed?.name}!`);
+  const handleCreateRecord = async (record: GardenRecordDraft): Promise<boolean> => {
+    try {
+      const selectedBed = beds.find((bed) => bed.id === record.bedId);
+      if (!selectedBed) throw new Error('O canteiro selecionado não foi encontrado.');
+      const result = await createGardenRecord({
+        ...record,
+        moisture: selectedBed.moisture,
+        temperature: selectedBed.temperature,
+      });
+      setBeds((prev) => prev.map((bed) => bed.id === result.bed.id ? result.bed : bed));
+      setAlerts(result.alerts);
+      showToast(`Novo registro adicionado com sucesso para ${result.bed.name}!`);
+      return true;
+    } catch (error) {
+      showActionError(error instanceof Error ? error.message : 'Não foi possível salvar o registro.');
+      return false;
+    }
   };
 
   // Mark all notifications as read
-  const handleMarkAllAlertsRead = () => {
-    setAlerts((prev) => prev.map((a) => ({ ...a, read: true })));
-    showToast('Notificações marcadas como lidas.');
+  const handleMarkAllAlertsRead = async () => {
+    try {
+      setAlerts(await markAlertsAsRead());
+      showToast('Notificações marcadas como lidas.');
+    } catch (error) {
+      showActionError(error instanceof Error ? error.message : 'Não foi possível atualizar as notificações.');
+    }
+  };
+
+  const handleAssignDevice = async (deviceId: number, schoolId: number) => {
+    await assignDeviceToSchool(deviceId, schoolId);
+    const [currentSchools, currentDevices] = await Promise.all([getSchools(), getDevices()]);
+    setSchools(currentSchools);
+    setDevices(currentDevices);
+  };
+
+  const handleLogout = () => {
+    clearSession();
+    setLoggedInUser(null);
+    setIsLoggedIn(false);
+    setCurrentTab('dashboard');
+    setAuthError(null);
   };
 
   // Computed metrics
@@ -169,26 +221,42 @@ export default function App() {
     (a) => !a.read && (a.severity === 'critical' || a.severity === 'warning')
   ).length;
 
-  const currentAvgMoisture = Math.round(
-    beds.reduce((acc, b) => acc + b.moisture, 0) / beds.length
-  );
-
-  const currentAvgTemp =
-    beds.reduce((acc, b) => acc + b.temperature, 0) / beds.length;
+  const measuredBeds = beds.filter((bed) => bed.status !== 'Atenção');
+  const currentAvgMoisture = measuredBeds.length
+    ? Math.round(measuredBeds.reduce((acc, bed) => acc + bed.moisture, 0) / measuredBeds.length)
+    : null;
+  const currentAvgTemp = measuredBeds.length
+    ? measuredBeds.reduce((acc, bed) => acc + bed.temperature, 0) / measuredBeds.length
+    : null;
+  const speciesCount = new Set(
+    beds.map((bed) => bed.plant).filter((plant) => plant !== 'Não cadastrada'),
+  ).size;
 
   const tabNames: Record<NavItem, string> = {
     dashboard: 'Dashboard',
     canteiros: 'Canteiros',
     plantas: 'Plantas',
     sensores: 'Sensores',
+    escolas: 'Escolas',
     relatorios: 'Relatórios',
   };
+
+  if (isRestoringSession) {
+    return (
+      <main className="flex min-h-screen items-center justify-center bg-[#f7f9f6] p-6 text-center">
+        <p className="text-sm font-semibold text-stone-600">Verificando sua sessão...</p>
+      </main>
+    );
+  }
 
   if (!isLoggedIn) {
     return (
       <Login
+        initialError={authError}
         onLogin={(user) => {
           setLoggedInUser(user);
+          setAuthError(null);
+          setIsDataLoading(true);
           setIsLoggedIn(true);
         }}
       />
@@ -225,13 +293,19 @@ export default function App() {
           <span>{toastMessage}</span>
         </div>
       )}
+      {actionError && (
+        <div role="alert" className="fixed top-5 right-5 z-50 max-w-sm rounded-2xl border border-red-200 bg-white px-4 py-3 text-xs font-semibold text-red-700 shadow-xl">
+          {actionError}
+        </div>
+      )}
 
       {/* Left Sidebar Navigation */}
       <Sidebar
-        user={loggedInUser ?? { name: 'Fernanda', role: 'Professora' }}
+        user={loggedInUser ?? { name: '', role: '' }}
         currentTab={currentTab}
         onSelectTab={setCurrentTab}
         onOpenHelp={() => setIsGuideOpen(true)}
+        onLogout={handleLogout}
         isMobileOpen={isMobileMenuOpen}
         onCloseMobile={() => setIsMobileMenuOpen(false)}
       />
@@ -257,7 +331,7 @@ export default function App() {
                     VISÃO GERAL
                   </span>
                   <h1 className="text-2xl sm:text-3xl font-extrabold text-[#172b1d] tracking-tight">
-                    Bom dia, {loggedInUser?.name ?? 'Fernanda'}!
+                    Olá, {loggedInUser?.name}!
                   </h1>
                   <p className="text-xs sm:text-sm text-stone-500 mt-1">
                     Aqui está o resumo das condições da horta hoje.
@@ -268,8 +342,18 @@ export default function App() {
                 <div className="flex flex-wrap items-center gap-2.5 self-start sm:self-auto">
                   <button
                     onClick={() => {
-                      exportReportByType('geral', beds, alerts, environmentMetrics);
-                      showToast('Relatório da horta em PDF exportado com sucesso!');
+                      exportReportByType(
+                        'geral',
+                        beds,
+                        alerts,
+                        environmentMetrics,
+                        loggedInUser?.name ?? 'Usuário',
+                        schools.map((school) => school.name),
+                      )
+                        .then(() => showToast('Relatório da horta exportado com sucesso!'))
+                        .catch((error: unknown) => showActionError(
+                          error instanceof Error ? error.message : 'Não foi possível gerar o relatório.',
+                        ));
                     }}
                     className="inline-flex items-center gap-2 px-3.5 py-2.5 bg-white hover:bg-stone-50 border border-stone-200/90 text-stone-700 hover:text-[#1b4d2a] text-xs sm:text-sm font-semibold rounded-xl shadow-xs transition-all duration-150 cursor-pointer active:scale-95"
                     title="Baixar relatório completo consolidado em PDF"
@@ -291,16 +375,16 @@ export default function App() {
 
               {/* 4 Stat KPI Cards */}
               <StatCards
-                plantCount={42}
-                avgMoisture={currentAvgMoisture || 61}
-                avgTemperature={currentAvgTemp || 27.4}
-                alertCount={activeUnreadAlerts || 2}
+                plantCount={speciesCount}
+                avgMoisture={currentAvgMoisture}
+                avgTemperature={currentAvgTemp}
+                alertCount={activeUnreadAlerts}
                 onCardClick={(type) => {
                   if (type === 'plantas') setCurrentTab('plantas');
                   else if (type === 'alertas') {
-                    // Open bed in trouble (Canteiro 03)
-                    const bed3 = beds.find((b) => b.id === 'c3') || beds[0];
-                    setSelectedBedForDetail(bed3);
+                    const alertBedId = alerts.find((alert) => !alert.read && alert.bedId)?.bedId;
+                    const alertBed = beds.find((bed) => bed.id === alertBedId);
+                    if (alertBed) setSelectedBedForDetail(alertBed);
                   }
                 }}
               />
@@ -308,7 +392,7 @@ export default function App() {
               {/* Middle Section: Soil Moisture Chart + Recent Alerts */}
               <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
                 <div className="lg:col-span-2">
-                  <SoilMoistureChart currentMoisture={currentAvgMoisture || 61} />
+                  <SoilMoistureChart currentMoisture={currentAvgMoisture} />
                 </div>
                 <div className="lg:col-span-1">
                   <AlertsList
@@ -357,13 +441,24 @@ export default function App() {
             />
           )}
 
-          {currentTab === 'sensores' && <SensoresView />}
+          {currentTab === 'sensores' && (
+            <SensoresView
+              user={loggedInUser ?? { name: 'Fernanda', role: 'Professora', profile: 'usuario' }}
+              devices={devices}
+              schools={schools}
+              onAssignDevice={handleAssignDevice}
+            />
+          )}
+
+          {currentTab === 'escolas' && <EscolasView schools={schools} />}
 
           {currentTab === 'relatorios' && (
             <RelatoriosView
               beds={beds}
               alerts={alerts}
               metrics={environmentMetrics}
+              author={loggedInUser?.name ?? 'Usuário'}
+              schoolNames={schools.map((school) => school.name)}
               onExportSuccess={(msg) => showToast(msg)}
             />
           )}

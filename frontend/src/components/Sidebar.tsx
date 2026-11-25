@@ -5,19 +5,19 @@ import {
   Leaf,
   Sliders,
   FileCheck,
-  HelpCircle,
-  MoreHorizontal,
   X,
-  Sprout
+  School,
+  LogOut,
 } from 'lucide-react';
 
-export type NavItem = 'dashboard' | 'canteiros' | 'plantas' | 'sensores' | 'relatorios';
+export type NavItem = 'dashboard' | 'canteiros' | 'plantas' | 'sensores' | 'escolas' | 'relatorios';
 
 interface SidebarProps {
   user: { name: string; role: string };
   currentTab: NavItem;
   onSelectTab: (tab: NavItem) => void;
   onOpenHelp: () => void;
+  onLogout: () => void;
   isMobileOpen?: boolean;
   onCloseMobile?: () => void;
 }
@@ -27,6 +27,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
   currentTab,
   onSelectTab,
   onOpenHelp,
+  onLogout,
   isMobileOpen = false,
   onCloseMobile,
 }) => {
@@ -50,6 +51,11 @@ export const Sidebar: React.FC<SidebarProps> = ({
       id: 'sensores' as NavItem,
       label: 'Sensores',
       icon: Sliders,
+    },
+    {
+      id: 'escolas' as NavItem,
+      label: 'Escolas',
+      icon: School,
     },
     {
       id: 'relatorios' as NavItem,
@@ -168,11 +174,12 @@ export const Sidebar: React.FC<SidebarProps> = ({
           </div>
 
           <button
-            onClick={() => alert('Configurações de perfil do usuário')}
-            className="p-1.5 text-stone-400 hover:text-stone-700 hover:bg-stone-100 rounded-lg transition-colors"
-            title="Opções do perfil"
+            onClick={onLogout}
+            className="p-1.5 text-stone-400 hover:text-red-700 hover:bg-red-50 rounded-lg transition-colors"
+            title="Sair da conta"
+            aria-label="Sair da conta"
           >
-            <MoreHorizontal className="w-5 h-5" />
+            <LogOut className="w-5 h-5" />
           </button>
         </div>
       </div>

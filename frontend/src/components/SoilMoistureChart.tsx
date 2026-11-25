@@ -1,19 +1,19 @@
 import React, { useEffect, useState } from 'react';
-import { ArrowUp } from 'lucide-react';
 import type { ChartDataPoint } from '../types/garden';
 import { getMoistureChart } from '../services/hortaService';
 
 type TimeRange = '24h' | '7d' | '30d';
 
 interface SoilMoistureChartProps {
-  currentMoisture?: number;
+  currentMoisture: number | null;
 }
 
 export const SoilMoistureChart: React.FC<SoilMoistureChartProps> = ({
-  currentMoisture = 61,
+  currentMoisture,
 }) => {
   const [timeRange, setTimeRange] = useState<TimeRange>('24h');
   const [data, setData] = useState<ChartDataPoint[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
   const [chartError, setChartError] = useState<string | null>(null);
   const [hoveredPoint, setHoveredPoint] = useState<ChartDataPoint | null>(null);
   const [hoverPos, setHoverPos] = useState<{ x: number; y: number } | null>(null);
@@ -22,17 +22,26 @@ export const SoilMoistureChart: React.FC<SoilMoistureChartProps> = ({
     let active = true;
     setData([]);
     setChartError(null);
-    getMoistureChart(timeRange)
-      .then((points) => {
-        if (active) setData(points);
-      })
-      .catch((error: unknown) => {
-        if (active) {
-          setChartError(error instanceof Error ? error.message : 'Não foi possível carregar o gráfico.');
-        }
-      });
+    setIsLoading(true);
+    const refreshChart = () => {
+      getMoistureChart(timeRange)
+        .then((points) => {
+          if (active) setData(points);
+        })
+        .catch((error: unknown) => {
+          if (active) {
+            setChartError(error instanceof Error ? error.message : 'Não foi possível carregar o gráfico.');
+          }
+        })
+        .finally(() => {
+          if (active) setIsLoading(false);
+        });
+    };
+    refreshChart();
+    const refreshInterval = window.setInterval(refreshChart, 30_000);
     return () => {
       active = false;
+      window.clearInterval(refreshInterval);
     };
   }, [timeRange]);
 
@@ -43,10 +52,17 @@ export const SoilMoistureChart: React.FC<SoilMoistureChartProps> = ({
       </div>
     );
   }
-  if (data.length < 2) {
+  if (isLoading) {
     return (
       <div className="flex min-h-[280px] items-center justify-center rounded-2xl border border-stone-200/70 bg-white p-6 text-sm text-stone-500">
         Carregando gráfico de umidade...
+      </div>
+    );
+  }
+  if (data.length < 2) {
+    return (
+      <div className="flex min-h-[280px] items-center justify-center rounded-2xl border border-stone-200/70 bg-white p-6 text-center text-sm text-stone-500">
+        Ainda não há leituras suficientes para exibir o gráfico.
       </div>
     );
   }
@@ -146,15 +162,11 @@ export const SoilMoistureChart: React.FC<SoilMoistureChartProps> = ({
       {/* Main Metric Stat Display */}
       <div className="flex items-baseline gap-3 mb-4">
         <span className="text-3xl font-extrabold text-[#172b1d] tracking-tight tabular-nums">
-          {currentMoisture}%
+          {currentMoisture === null ? '—' : `${currentMoisture}%`}
         </span>
-        <div className="flex items-center gap-1 text-xs font-semibold text-[#1e6b39]">
-          <ArrowUp className="w-3.5 h-3.5" />
-          <span>4,2%</span>
-          <span className="text-stone-400 font-normal ml-0.5">
-            vs. período anterior
-          </span>
-        </div>
+        <span className="text-xs font-medium text-stone-400">
+          Umidade média mais recente
+        </span>
       </div>
 
       {/* Area Chart Container */}
@@ -315,7 +327,7 @@ export const SoilMoistureChart: React.FC<SoilMoistureChartProps> = ({
               {hoveredPoint.value}% umidade
             </div>
             <div className="text-[10px] text-stone-300">
-              {hoveredPoint.time} • {hoveredPoint.status}
+              {hoveredPoint.time}
             </div>
           </div>
         )}
